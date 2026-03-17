@@ -7,7 +7,6 @@ A Tampermonkey userscript that adds bulk status management to [SwiftProjects](ht
 ## Features
 
 - **Click to select** individual tasks or requirements
-- **Shift+click** to select a range
 - **Select Visible** — selects all currently rendered items on screen
 - **Bulk apply** Approved, Pending, Submitted, or Cancelled status
 - Automatically skips items already set to the target status
