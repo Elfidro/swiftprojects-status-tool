@@ -2,6 +2,8 @@
 
 A Tampermonkey userscript that adds bulk status management to [SwiftProjects](https://swiftprojects.io). Select multiple tasks or requirements and apply a status to all of them in one click.
 
+https://github.com/user-attachments/assets/9e82d923-57f5-41f4-9cd8-8e1303645f97
+
 ---
 
 ## Features
