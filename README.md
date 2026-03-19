@@ -53,6 +53,9 @@ To check manually: Tampermonkey Dashboard → Status Tool → Check for updates.
 
 ## Changelog
 
+### v1.09
+- Fixed issues with updating statuses
+
 ### v1.01
 - Polished UI: dark slate header, gradient buttons, Inter font, rounded panel
 - Checkbox style updated to match SwiftProjects' native checkbox appearance
