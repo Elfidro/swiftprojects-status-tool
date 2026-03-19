@@ -3,7 +3,7 @@
 // @namespace    https://github.com/Elfidro/swiftprojects-status-tool
 // @version      1.09
 // @author       Luigi Cortez
-// @description  Bulk status updater for SwiftProjects — select tasks/requirements and apply statuses in one click. Supports shift-select, select-visible, and draggable panel.
+// @description  Bulk status updater for SwiftProjects — select tasks/requirements and apply statuses in one click. Supports select-visible and draggable panel.
 // @homepageURL  https://github.com/Elfidro/swiftprojects-status-tool
 // @supportURL   https://github.com/Elfidro/swiftprojects-status-tool/issues
 // @updateURL    https://raw.githubusercontent.com/Elfidro/swiftprojects-status-tool/main/status-tool.user.js
