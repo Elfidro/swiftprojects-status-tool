@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SwiftProjects Status Tool
 // @namespace    https://github.com/Elfidro/swiftprojects-status-tool
-// @version      1.01
+// @version      1.09
 // @author       Luigi Cortez
 // @description  Bulk status updater for SwiftProjects — select tasks/requirements and apply statuses in one click. Supports shift-select, select-visible, and draggable panel.
 // @homepageURL  https://github.com/Elfidro/swiftprojects-status-tool
@@ -220,7 +220,9 @@
       <select id="tm-status">
         <option value="approved">Approved</option>
         <option value="pending">Pending</option>
+        <option value="in_progress">In Progress</option>
         <option value="submitted">Submitted</option>
+        <option value="rejected">Rejected</option>
         <option value="cancelled">Cancelled</option>
       </select>
       <button id="tm-apply">Apply Status</button>
@@ -331,30 +333,74 @@
     lastClickedIndex = null;
   };
 
+  // Use prefix-match selectors so both "status-approved" and "status-approved-active" are found
   const STATUS_SELECTORS = {
-    approved: '.selector-item-status-approved',
-    pending: '.selector-item-status-pending',
-    submitted: '.selector-item-status-submitted',
-    cancelled: '.selector-item-status-cancelled'
+    approved:    '[class*="selector-item-status-approved"]',
+    pending:     '[class*="selector-item-status-pending"]',
+    submitted:   '[class*="selector-item-status-submitted"]',
+    cancelled:   '[class*="selector-item-status-cancelled"]',
+    in_progress: '[class*="selector-item-status-in_progress"]',
+    rejected:    '[class*="selector-item-status-rejected"]'
   };
 
   const STATUS_LABELS = {
     approved: 'Approved',
     pending: 'Pending',
     submitted: 'Submitted',
-    cancelled: 'Cancelled'
+    cancelled: 'Cancelled',
+    in_progress: 'In Progress',
+    rejected: 'Rejected'
   };
 
   const wait = ms => new Promise(r => setTimeout(r, ms));
 
-  function getCurrentStatus(row) {
+  // Read the current status from the icon class (works on both Tasks and Requirements views)
+  // Icon classes look like: status-approved-active, status-pending-active, status-rejected-active, etc.
+  function getCurrentStatusFromIcon(row) {
+    const icon = row.querySelector('.PopoverSelect.StatusSelector .PopoverSelect__icon');
+    if (!icon) return '';
+    const match = icon.className.match(/status-(\w+)-active/);
+    if (match) return match[1]; // returns: approved, pending, submitted, cancelled, rejected, inprogress
+    return '';
+  }
+
+  // Also check the label text as a fallback (Tasks view has .StatusSelector__label)
+  function getCurrentStatusFromLabel(row) {
     const el = row.querySelector('.StatusSelector__label');
     return el ? el.textContent.trim() : '';
   }
 
+  // Wait for any active popover backdrop to close (up to ~1s)
+  async function waitForPopoverClose() {
+    for (let i = 0; i < 20; i++) {
+      if (!document.querySelector('.popover-backdrop.active')) return true;
+      await wait(50);
+    }
+    return false;
+  }
+
+  // Dismiss the status popover by clicking its backdrop — lets ionic clean up its own state
+  async function dismissPopover() {
+    const backdrop = document.querySelector('.popover-backdrop.active');
+    if (!backdrop) return;
+    backdrop.click();
+    await waitForPopoverClose();
+  }
+
   async function setStatus(row, key) {
-    const current = getCurrentStatus(row);
-    if (current === STATUS_LABELS[key]) return 'skipped';
+    // --- Pre-check: detect current status WITHOUT opening the popover ---
+    // Method 1: Check icon class (reliable on both Tasks and Requirements views)
+    const iconStatus = getCurrentStatusFromIcon(row);
+    // Normalize: icon uses "inprogress" but key uses "in_progress"
+    const normalizedIcon = iconStatus.replace('inprogress', 'in_progress');
+    if (normalizedIcon === key) return 'skipped';
+
+    // Method 2: Check label text (Tasks view fallback)
+    const labelStatus = getCurrentStatusFromLabel(row);
+    if (labelStatus && labelStatus === STATUS_LABELS[key]) return 'skipped';
+
+    // --- Make sure no other popover is open before we open a new one ---
+    await dismissPopover();
 
     const control = row.querySelector('.PopoverSelect.StatusSelector .PopoverSelect__content');
     if (!control) throw 'Status selector not found';
@@ -370,20 +416,45 @@
       await wait(100);
     }
 
-    if (!option) throw `Status ${key} not found`;
+    if (!option) {
+      await dismissPopover();
+      throw `Status ${key} not found`;
+    }
+
+    // Already active (class has -active suffix) — dismiss popover and skip
+    if (option.className.includes(`selector-item-status-${key}-active`)) {
+      await dismissPopover();
+      return 'skipped';
+    }
+
+    // Disabled — can't change to this status from the current state
+    if (option.className.includes('selector-item-status-disabled') || option.hasAttribute('disabled')) {
+      await dismissPopover();
+      return 'disabled';
+    }
 
     ['mousedown','mouseup','click'].forEach(t =>
       option.dispatchEvent(new MouseEvent(t, { bubbles: true }))
     );
 
+    // Wait for ionic to finish closing the popover after the selection
+    await waitForPopoverClose();
+
     return 'changed';
   }
 
   async function runSequential(rows, key) {
+    let changed = 0, skipped = 0, disabled = 0;
+
     for (const row of rows) {
-      await setStatus(row, key);
+      const result = await setStatus(row, key);
+      if (result === 'changed') changed++;
+      else if (result === 'skipped') skipped++;
+      else if (result === 'disabled') disabled++;
       await wait(10);
     }
+
+    return { changed, skipped, disabled };
   }
 
   document.getElementById('tm-apply').onclick = async () => {
@@ -393,8 +464,12 @@
     if (!rows.length) return alert('No items selected');
 
     try {
-      await runSequential(rows, key);
-      alert('Done (auto-skipped matching states)');
+      const { changed, skipped, disabled } = await runSequential(rows, key);
+      const parts = [];
+      if (changed) parts.push(`${changed} changed`);
+      if (skipped) parts.push(`${skipped} already ${STATUS_LABELS[key]}`);
+      if (disabled) parts.push(`${disabled} disabled/unavailable`);
+      alert(`Done — ${parts.join(', ')}`);
     } catch (e) {
       alert('Stopped: ' + e);
     }
